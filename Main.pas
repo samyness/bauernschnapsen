@@ -442,7 +442,7 @@ begin
   end
   else
   begin
-    // Rückseite: weißer Rand, weinrotes Rautenmuster, goldenes Medaillon
+    // Rückseite: weißer Rand, weinrotes Rautenmuster, S-Herz-V-Medaillon
     Canvas.Fill.Kind := TBrushKind.Solid;
     Canvas.Fill.Color := $FFFBF8F1;
     Canvas.FillRect(Body, Rad, Rad, AllCorners, Op);
@@ -476,16 +476,26 @@ begin
       end;
       Y := Y + Step;
     end;
-    R := RectF(W / 2 - W * 0.2, H / 2 - W * 0.2, W / 2 + W * 0.2, H / 2 + W * 0.2);
-    Canvas.Fill.Color := $FF7A1426;
+    R := RectF(W / 2 - W * 0.34, H / 2 - W * 0.3, W / 2 + W * 0.34, H / 2 + W * 0.3);
+    Canvas.Fill.Color := $FF6A1020;
     Canvas.FillEllipse(R, Op);
     Canvas.Stroke.Color := $FFD4AF37;
     Canvas.Stroke.Thickness := Max(1.5, W * 0.02);
     Canvas.DrawEllipse(R, Op);
+    Canvas.Stroke.Color := $80FFF1B8;
+    Canvas.Stroke.Thickness := Max(0.8, W * 0.008);
+    R.Inflate(-W * 0.035, -W * 0.035);
+    Canvas.DrawEllipse(R, Op);
     Canvas.Stroke.Thickness := 1;
     Canvas.Stroke.Color := $90D4AF37;
     Canvas.DrawRect(Inner, Rad * 0.6, Rad * 0.6, AllCorners, Op);
-    Txt(#$2665, R, W * 0.2, $FFD4AF37, SymbolFont);
+    R.Inflate(-W * 0.08, -W * 0.08);
+    Txt('S', RectF(R.Left, R.Top, R.Left + R.Width * 0.3, R.Bottom),
+      W * 0.11, $FFFFE8A3, IndexFont, True);
+    Txt(#$2665, RectF(R.Left + R.Width * 0.28, R.Top, R.Left + R.Width * 0.72, R.Bottom),
+      W * 0.15, $FFFF3B3B, SymbolFont, True);
+    Txt('V', RectF(R.Left + R.Width * 0.7, R.Top, R.Right, R.Bottom),
+      W * 0.11, $FFFFE8A3, IndexFont, True);
   end;
   Canvas.SetMatrix(Saved);
 end;
