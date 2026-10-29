@@ -40,8 +40,9 @@ $pb.CenterColor = [Drawing.Color]::FromArgb(36, 138, 84)
 $pb.SurroundColors = @([Drawing.Color]::FromArgb(10, 46, 28))
 $g.FillPath($pb, $bg)
 $g.DrawPath((New-Object Drawing.Pen ([Drawing.Color]::FromArgb(201, 162, 39)), 8), $bg)
-Card $g 214 266 -14 'K' ([string][char]0x2663) ([Drawing.Color]::FromArgb(27, 27, 31))
-Card $g 300 262 12 'A' ([string][char]0x2665) ([Drawing.Color]::FromArgb(211, 47, 47))
+# Sam & Viki: S-Karte hinten, V-Karte mit Herz vorne
+Card $g 214 266 -14 'S' ([string][char]0x2660) ([Drawing.Color]::FromArgb(27, 27, 31))
+Card $g 300 262 12 'V' ([string][char]0x2665) ([Drawing.Color]::FromArgb(211, 47, 47))
 $g.Dispose()
 $bmp.Save("$dir\ic_launcher_512.png")
 
@@ -53,3 +54,16 @@ foreach ($n in 36, 48, 72, 96, 144, 192) {
   $sg.Dispose()
   $s.Save("$dir\ic_launcher_$n.png")
 }
+
+# Startbild: nur Tischfilz statt Embarcadero-Logo (alle Splash-Größen nutzen dieselbe Datei)
+$sp = New-Object Drawing.Bitmap 960, 720
+$spg = [Drawing.Graphics]::FromImage($sp)
+$spg.Clear([Drawing.Color]::FromArgb(11, 61, 36))
+$spg.Dispose()
+$sp.Save("$dir\splash.png")
+# Android 12+ (Vektor-Startbild): unsichtbare Fläche
+Set-Content -Path "$dir\splash_empty.xml" -Encoding ascii -Value @'
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="1dp" android:height="1dp" android:viewportWidth="1" android:viewportHeight="1">
+  <path android:fillColor="#00000000" android:pathData="M0,0h1v1h-1z"/>
+</vector>
+'@

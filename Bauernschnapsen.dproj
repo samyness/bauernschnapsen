@@ -139,12 +139,16 @@
         <VerInfo_Build>1</VerInfo_Build>
         <VerInfo_IncludeVerInfo>true</VerInfo_IncludeVerInfo>
         <VerInfo_Keys>package=com.embarcadero.$(MSBuildProjectName);label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;restoreAnyVersion=False;installLocation=auto;largeHeap=False;theme=TitleBar;hardwareAccelerated=true;apiKey=</VerInfo_Keys>
-        <Android_BackgroundColor>#FFFFFF</Android_BackgroundColor>
-        <Android_DarkBackgroundColor>#000000</Android_DarkBackgroundColor>
+        <Android_BackgroundColor>#0B3D24</Android_BackgroundColor>
+        <Android_DarkBackgroundColor>#0B3D24</Android_DarkBackgroundColor>
         <Android_NotificationAccentColor>#000000</Android_NotificationAccentColor>
         <AUP_BLUETOOTH_ADMIN>true</AUP_BLUETOOTH_ADMIN>
         <AUP_BLUETOOTH_CONNECT>true</AUP_BLUETOOTH_CONNECT>
         <AUP_BLUETOOTH_SCAN>true</AUP_BLUETOOTH_SCAN>
+        <Android_SplashImage426>icons\splash.png</Android_SplashImage426>
+    <Android_SplashImage470>icons\splash.png</Android_SplashImage470>
+    <Android_SplashImage640>icons\splash.png</Android_SplashImage640>
+    <Android_SplashImage960>icons\splash.png</Android_SplashImage960>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_iOSDevice32)'!=''">
         <iPhone_AppIcon120>$(BDS)\bin\Artwork\iOS\iPhone\FM_ApplicationIcon_120x120.png</iPhone_AppIcon120>
