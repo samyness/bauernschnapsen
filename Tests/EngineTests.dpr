@@ -26,6 +26,7 @@ end;
 procedure RuleTests;
 var
   G: TGame;
+  C: TCard;
 begin
   // Stichzwang: Farbe bedienen und überstechen
   G := Fresh(suHerz, ctNormal, 0);
@@ -48,6 +49,11 @@ begin
   PlayCard(G, MakeCard(suPik, rkAss));
   Check(LegalMoves(G) = [MakeCard(suPik, rkBube)], 'Assenbettler Rangfolge');
   Check(not G.Active[2], 'Partner pausiert im Bettler');
+
+  // Training fragt immer die schwere KI, ohne die gewählte Gegnerstärke zu verändern.
+  AILevel := alLeicht;
+  C := AIChooseCardAtLevel(G, alSchwer);
+  Check((C in LegalMoves(G)) and (AILevel = alLeicht), 'Trainingsempfehlung');
 
   // 40er nach eigenem Stich gewinnt sofort
   G := Fresh(suHerz, ctNormal, 0);

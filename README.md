@@ -7,6 +7,7 @@
 - Alle gängigen Spiele: Normales Spiel, Bettler, Assenbettler, Schnapser, Plauderer, Gang, Zehnergang, Bauernschnapser, Kontraschnapser, Farbenringerl, Kontrabauernschnapser, Herrenschnapser
 - Trumpf rufen (auch blind), Ansagen mit Vorrang, Spritzen und Retour, 20/40, Bummerl bis 24 mit Schneider
 - Farb- und Stichzwang, erlaubte Karten werden hervorgehoben
+- Optionaler Trainingsmodus: Die schwere KI empfiehlt Trumpf, Ansage, Spritzen/Retour und die nächste Karte, gespielt wird weiterhin selbst
 - KI in drei Stärken (Leicht, Mittel, Schwer). Sie sieht nur ihre eigenen Karten, ein Test prüft das.
 - Mehrspieler über Bluetooth: Jeder Platz ist einzeln auf KI oder Mensch einstellbar. Der Gastgeber mischt und rechnet die KI, alle Geräte spielen im Gleichschritt.
 - Animierte, selbst gezeichnete Karten, Querformat, skaliert vom Handy bis zum PC

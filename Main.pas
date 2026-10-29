@@ -23,7 +23,7 @@ type
     procedure DoMouseLeave; override;
   public
     Card: TCard;
-    Dim, Playable: Boolean;
+    Dim, Playable, Suggested: Boolean;
     Loc: TCardLoc;
     Seat: TSeat;
     Jitter, JX, JY: Single;
@@ -105,7 +105,7 @@ type
     FLinks: TList<TNetLink>;
     FHost: TNetLink;
     FServer: TNetServer;
-    FInGame, FUseTcp, FAuto, FSeatGot: Boolean;
+    FInGame, FUseTcp, FAuto, FSeatGot, FTraining: Boolean;
     FJoinId: Integer;
     FLogFile: string;
     // UI
@@ -164,7 +164,8 @@ type
     procedure UpdatePlates;
     procedure UpdateHud;
     procedure UpdateScore;
-    procedure Ask(const Title: string; const Caps, Subs: TArray<string>; const Done: TProc<Integer>);
+    procedure Ask(const Title: string; const Caps, Subs: TArray<string>; const Done: TProc<Integer>;
+      Suggested: Integer = -1);
     procedure HidePanel;
     procedure ShowOverlay(const Title, Detail, Button: string; const Next: TProc; Cancelable: Boolean = False);
     procedure Pause(On: Boolean);
@@ -218,6 +219,7 @@ type
     procedure SpritzenStep(Idx: Integer);
     procedure Spritzt(D: TSeat);
     procedure BeginPlay;
+    procedure OfferHumanMove(const Done: TProc<string>; Suggested: Integer);
     procedure NextTurn;
     procedure DoPlay(C: TCard);
     procedure CollectTrick(W: TSeat);
@@ -570,7 +572,14 @@ begin
     Canvas.Fill.Color := $70101418;
     Canvas.FillRect(RectF(2, 2, W - 4, H - 5), Rad, Rad, AllCorners, Op);
   end;
-  if Front and Playable and IsMouseOver then
+  if Front and Suggested then
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Color := $FF4DD0E1;
+    Canvas.Stroke.Thickness := 4;
+    Canvas.DrawRect(RectF(3, 3, W - 5, H - 6), Rad, Rad, AllCorners, Op);
+  end
+  else if Front and Playable and IsMouseOver then
   begin
     Canvas.Stroke.Kind := TBrushKind.Solid;
     Canvas.Stroke.Color := Gold;
@@ -1249,7 +1258,8 @@ begin
   BummerlText.Text := Format('Gewonnene Bummerl:  Wir %d  ·  Sie %d', [Bummerl[MyTeam], Bummerl[1 - MyTeam]]);
 end;
 
-procedure TGameForm.Ask(const Title: string; const Caps, Subs: TArray<string>; const Done: TProc<Integer>);
+procedure TGameForm.Ask(const Title: string; const Caps, Subs: TArray<string>; const Done: TProc<Integer>;
+  Suggested: Integer);
 var
   I, Cols, Rows: Integer;
   BW, BH, Gap, PW, PH: Single;
@@ -1281,11 +1291,16 @@ begin
   PH := 66 + Rows * BH + (Rows - 1) * Gap + 20;
   Panel.SetBounds((FVW - PW) / 2, TableCenter.Y - PH / 2, PW, PH);
   PanelTitle.SetBounds(20, 14, PW - 40, 36);
-  PanelTitle.Text := Title;
+  PanelTitle.Text := Title + IfThen(Suggested >= 0, '  ·  Training', '');
   for I := 0 to High(Caps) do
   begin
     B := MakeButton(Panel, Caps[I], Subs[I],
       TRectF.Create(PointF(20 + (I mod Cols) * (BW + Gap), 60 + (I div Cols) * (BH + Gap)), BW, BH));
+    if I = Suggested then
+    begin
+      B.Stroke.Color := $FF4DD0E1;
+      B.Stroke.Thickness := 4;
+    end;
     B.Action := Choice(I);
     PanelButtons.Add(B);
   end;
@@ -1752,6 +1767,15 @@ var
       end;
   end;
 
+  function ToggleTraining: TProc;
+  begin
+    Result := procedure
+      begin
+        FTraining := not FTraining;
+        ShowSetupPage;
+      end;
+  end;
+
 begin
   ClearLobby;
   LobbyText('Bauernschnapsen', 32, 22, 500, 28, Gold, True);
@@ -1766,8 +1790,8 @@ begin
   LobbyText('Stärke der KI', 32, 300, 230, 15, $FFFFFFFF, True);
   for L := Low(TAILevel) to High(TAILevel) do
     LobbyButton(AILevelName[L], '', 32 + Ord(L) * 176, 330, 166, 44, IfThen(AILevel = L, Sel, Off), SetLevel(L));
-  LobbyText('„Mensch“: Mitspieler verbinden sich per Bluetooth mit derselben App. ' +
-    'Koppelt die Geräte vorher in den Bluetooth-Einstellungen.', 32, 392, 520, 12.5, $FF8FA0AE, False).Height := 40;
+  LobbyButton('Trainingsmodus', IfThen(FTraining, 'AN · Schwere KI empfiehlt deine Karte', 'AUS'),
+    32, 382, 520, 44, IfThen(FTraining, Sel, Off), ToggleTraining());
   LobbyStatus := LobbyText('', 32, 432, 520, 13, $FFFF8A80, True);
   LobbyButton('Spiel starten', 'als Gastgeber', 32, 472, 255, 58, $FF2E7D4F, HostPressed);
   LobbyButton('Spiel beitreten', 'bei einem anderen Gerät', 297, 472, 255, 58, $FF1E5A8A, ShowJoinPage);
@@ -2187,6 +2211,7 @@ begin
     V.Opacity := 1;
     V.Dim := False;
     V.Playable := False;
+    V.Suggested := False;
     V.Cursor := crDefault;
     V.HitTest := False;
     V.TurnTo(False);
@@ -2275,7 +2300,12 @@ begin
       Result := IntToStr(Ord(AIChooseTrump(First3)));
     end,
     procedure(Done: TProc<string>)
+    var
+      Suggested: Integer;
     begin
+      Suggested := -1;
+      if FTraining then
+        Suggested := Ord(AIChooseTrump(First3));
       Ask('Trumpf rufen',
         [SuitSymbol[suKreuz] + ' Kreuz', SuitSymbol[suPik] + ' Pik', SuitSymbol[suHerz] + ' Herz',
          SuitSymbol[suKaro] + ' Karo', 'Blind'],
@@ -2283,7 +2313,7 @@ begin
         procedure(I: Integer)
         begin
           Done(IntToStr(I));
-        end);
+        end, Suggested);
     end,
     procedure(V: string)
     var
@@ -2353,6 +2383,7 @@ begin
       C: TContract;
       Opts: TArray<TContract>;
       Caps, Subs: TArray<string>;
+      ShowChoices: TProc<Integer>;
     begin
       Opts := [];
       Caps := [];
@@ -2369,15 +2400,39 @@ begin
         Hint('Willst du ein Spiel ansagen? Details unter „Regeln“')
       else
         Hint(SeatName(FBidDecl) + Verb(FBidDecl, ' hast ', ' hat ') + ContractName[FBid] + ' angesagt – überbieten?');
-      Ask('Ansagen', Caps, Subs,
-        procedure(I: Integer)
+      ShowChoices := procedure(Suggested: Integer)
         begin
-          Hint('');
-          if I < Length(Opts) then
-            Done(IntToStr(Ord(Opts[I])))
-          else
-            Done('0');
-        end);
+          Ask('Ansagen', Caps, Subs,
+            procedure(I: Integer)
+            begin
+              Hint('');
+              if I < Length(Opts) then
+                Done(IntToStr(Ord(Opts[I])))
+              else
+                Done('0');
+            end, Suggested);
+        end;
+      if FTraining then
+      begin
+        Hint('Training: Schwere KI überlegt …');
+        ComputeAsync(0,
+          function: string
+          begin
+            Result := IntToStr(Ord(AIChooseBid(G, FBidSeat, FBid, FBidDecl)));
+          end,
+          procedure(V: string)
+          var
+            I, Suggested: Integer;
+          begin
+            Suggested := Length(Opts);
+            for I := 0 to High(Opts) do
+              if Ord(Opts[I]) = StrToInt(V) then
+                Suggested := I;
+            ShowChoices(Suggested);
+          end);
+      end
+      else
+        ShowChoices(-1);
     end,
     procedure(V: string)
     begin
@@ -2439,13 +2494,33 @@ begin
       Result := IfThen(AIWantsSpritzen(G, D, FBid, FBidDecl), '1', '0');
     end,
     procedure(Done: TProc<string>)
+    var
+      ShowChoices: TProc<Integer>;
     begin
-      Ask('Spritzen?', ['Spritzen', 'Nein'],
-        [IfThen(FBid = ctNormal, 'gegen ' + SeatName(FBidDecl) + ' · ×2', ContractName[FBid] + ' · ×2'), 'weiterspielen'],
-        procedure(I: Integer)
+      ShowChoices := procedure(Suggested: Integer)
         begin
-          Done(IfThen(I = 0, '1', '0'));
-        end);
+          Ask('Spritzen?', ['Spritzen', 'Nein'],
+            [IfThen(FBid = ctNormal, 'gegen ' + SeatName(FBidDecl) + ' · ×2', ContractName[FBid] + ' · ×2'), 'weiterspielen'],
+            procedure(I: Integer)
+            begin
+              Done(IfThen(I = 0, '1', '0'));
+            end, Suggested);
+        end;
+      if FTraining then
+      begin
+        Hint('Training: Schwere KI überlegt …');
+        ComputeAsync(0,
+          function: string
+          begin
+            Result := IfThen(AIWantsSpritzenAtLevel(G, D, FBid, FBidDecl, alSchwer), '0', '1');
+          end,
+          procedure(V: string)
+          begin
+            ShowChoices(StrToInt(V));
+          end);
+      end
+      else
+        ShowChoices(-1);
     end,
     procedure(V: string)
     begin
@@ -2466,16 +2541,36 @@ begin
       Result := IfThen(AIWantsRetour(G, FBidDecl, FBid, FBidDecl), '1', '0');
     end,
     procedure(Done: TProc<string>)
+    var
+      ShowChoices: TProc<Integer>;
     begin
-      After(700,
-        procedure
+      ShowChoices := procedure(Suggested: Integer)
         begin
           Ask('Zurückspritzen?', ['Retour', 'Nein'], ['×4', 'bei ×2 bleiben'],
             procedure(I: Integer)
             begin
               Done(IfThen(I = 0, '1', '0'));
-            end);
-        end);
+            end, Suggested);
+        end;
+      if FTraining then
+      begin
+        Hint('Training: Schwere KI überlegt …');
+        ComputeAsync(700,
+          function: string
+          begin
+            Result := IfThen(AIWantsRetourAtLevel(G, FBidDecl, FBid, FBidDecl, alSchwer), '0', '1');
+          end,
+          procedure(V: string)
+          begin
+            ShowChoices(StrToInt(V));
+          end);
+      end
+      else
+        After(700,
+          procedure
+          begin
+            ShowChoices(-1);
+          end);
     end,
     procedure(V: string)
     begin
@@ -2533,32 +2628,54 @@ begin
       Result := IntToStr(AIChooseCard(G));
     end,
     procedure(Done: TProc<string>)
-    var
-      L: TCards;
-      C: TCard;
     begin
-      L := LegalMoves(G);
-      for C in VisHand[FMe] do
+      if FTraining then
       begin
-        Views[C].Playable := C in L;
-        Views[C].Dim := not (C in L);
-        Views[C].HitTest := True;
-        Views[C].Cursor := IfThen(C in L, crHandPoint, crDefault);
-        Views[C].Repaint;
-      end;
-      FCardDone := Done;
-      FAwaitHuman := True;
-      if G.TrickCount = 0 then
-        Hint('Du spielst aus – klick auf eine Karte')
-      else if CardCount(L) < CardCount(VisHand[FMe]) then
-        Hint('Du bist dran – Farb- und Stichzwang: nur helle Karten erlaubt')
+        Hint('Training: Schwere KI überlegt …');
+        ComputeAsync(0,
+          function: string
+          begin
+            Result := IntToStr(AIChooseCardAtLevel(G, alSchwer));
+          end,
+          procedure(V: string)
+          begin
+            OfferHumanMove(Done, StrToInt(V));
+          end);
+      end
       else
-        Hint('Du bist dran');
+        OfferHumanMove(Done, -1);
     end,
     procedure(V: string)
     begin
       DoPlay(StrToInt(V));
     end);
+end;
+
+procedure TGameForm.OfferHumanMove(const Done: TProc<string>; Suggested: Integer);
+var
+  L: TCards;
+  C: TCard;
+begin
+  L := LegalMoves(G);
+  for C in VisHand[FMe] do
+  begin
+    Views[C].Playable := C in L;
+    Views[C].Suggested := C = Suggested;
+    Views[C].Dim := not (C in L);
+    Views[C].HitTest := True;
+    Views[C].Cursor := IfThen(C in L, crHandPoint, crDefault);
+    Views[C].Repaint;
+  end;
+  FCardDone := Done;
+  FAwaitHuman := True;
+  if Suggested >= 0 then
+    Hint('Training: Türkis umrandet = Empfehlung der schweren KI')
+  else if G.TrickCount = 0 then
+    Hint('Du spielst aus – klick auf eine Karte')
+  else if CardCount(L) < CardCount(VisHand[FMe]) then
+    Hint('Du bist dran – Farb- und Stichzwang: nur helle Karten erlaubt')
+  else
+    Hint('Du bist dran');
 end;
 
 procedure TGameForm.CardClicked(V: TCardView);
@@ -2572,6 +2689,7 @@ begin
   for C in VisHand[FMe] do
   begin
     Views[C].Playable := False;
+    Views[C].Suggested := False;
     Views[C].Dim := False;
     Views[C].HitTest := False;
     Views[C].Cursor := crDefault;

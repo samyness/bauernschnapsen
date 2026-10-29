@@ -19,11 +19,16 @@ var
 
 function AIChooseTrump(const First3: TCards): TSuit;
 function AIChooseCard(const G: TGame): TCard;
+function AIChooseCardAtLevel(const G: TGame; Level: TAILevel): TCard;
 function AIWinRate(const G: TGame; Viewer: TSeat; Contract: TContract; Declarer: TSeat;
   Samples: Integer = 60): Double;
 function AIChooseBid(const G: TGame; P: TSeat; Current: TContract; CurrentBidder: TSeat): TContract;
 function AIWantsSpritzen(const G: TGame; P: TSeat; Contract: TContract; Declarer: TSeat): Boolean;
 function AIWantsRetour(const G: TGame; P: TSeat; Contract: TContract; Declarer: TSeat): Boolean;
+function AIWantsSpritzenAtLevel(const G: TGame; P: TSeat; Contract: TContract;
+  Declarer: TSeat; Level: TAILevel): Boolean;
+function AIWantsRetourAtLevel(const G: TGame; P: TSeat; Contract: TContract;
+  Declarer: TSeat; Level: TAILevel): Boolean;
 function PolicyMove(const G: TGame): TCard;
 procedure Playout(var G: TGame);
 function Determinize(const G: TGame; Viewer: TSeat): TGame;
@@ -336,7 +341,7 @@ begin
   Result := Result + (G.TeamPoints[Team] - G.TeamPoints[1 - Team]) / 500;
 end;
 
-function AIChooseCard(const G: TGame): TCard;
+function AIChooseCardAtLevel(const G: TGame; Level: TAILevel): TCard;
 var
   L: TCards;
   C: TCard;
@@ -350,7 +355,7 @@ begin
   if CardCount(L) = 1 then
     for C in L do
       Exit(C);
-  if AILevel = alLeicht then
+  if Level = alLeicht then
   begin
     // ohne Vorausrechnung, mit gelegentlichen Fehlgriffen
     if Random < 0.3 then
@@ -365,7 +370,7 @@ begin
     end;
     Exit(PolicyMove(Determinize(G, G.Turn)));
   end;
-  Samples := CardSamples[AILevel];
+  Samples := CardSamples[Level];
   SetLength(Worlds, Samples);
   for I := 0 to Samples - 1 do
     Worlds[I] := Determinize(G, G.Turn);
@@ -387,6 +392,11 @@ begin
       Result := C;
     end;
   end;
+end;
+
+function AIChooseCard(const G: TGame): TCard;
+begin
+  Result := AIChooseCardAtLevel(G, AILevel);
 end;
 
 function AIWinRate(const G: TGame; Viewer: TSeat; Contract: TContract; Declarer: TSeat;
@@ -434,12 +444,24 @@ end;
 
 function AIWantsSpritzen(const G: TGame; P: TSeat; Contract: TContract; Declarer: TSeat): Boolean;
 begin
-  Result := (AILevel <> alLeicht) and (AIWinRate(G, P, Contract, Declarer, BidSamples[AILevel]) < 0.25);
+  Result := AIWantsSpritzenAtLevel(G, P, Contract, Declarer, AILevel);
 end;
 
 function AIWantsRetour(const G: TGame; P: TSeat; Contract: TContract; Declarer: TSeat): Boolean;
 begin
-  Result := (AILevel <> alLeicht) and (AIWinRate(G, P, Contract, Declarer, BidSamples[AILevel]) > 0.8);
+  Result := AIWantsRetourAtLevel(G, P, Contract, Declarer, AILevel);
+end;
+
+function AIWantsSpritzenAtLevel(const G: TGame; P: TSeat; Contract: TContract;
+  Declarer: TSeat; Level: TAILevel): Boolean;
+begin
+  Result := (Level <> alLeicht) and (AIWinRate(G, P, Contract, Declarer, BidSamples[Level]) < 0.25);
+end;
+
+function AIWantsRetourAtLevel(const G: TGame; P: TSeat; Contract: TContract;
+  Declarer: TSeat; Level: TAILevel): Boolean;
+begin
+  Result := (Level <> alLeicht) and (AIWinRate(G, P, Contract, Declarer, BidSamples[Level]) > 0.8);
 end;
 
 end.
