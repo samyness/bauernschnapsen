@@ -179,6 +179,7 @@ type
     procedure Publish(Kind: Char; Seat: TSeat; const Value: string; Skip: Integer);
     procedure Decide(Kind: Char; Seat: TSeat; DelayMs: Integer; const Compute: TFunc<string>;
       const AskLocal: TProc<TProc<string>>; const Apply: TProc<string>);
+    procedure ComputeAsync(DelayMs: Integer; const Compute: TFunc<string>; const Done: TProc<string>);
     function ValidDecision(Kind: Char; Seat: TSeat; const Value: string): Boolean;
     procedure Enqueue(Kind: Char; Seat: TSeat; const Value: string);
     procedure ProcessInbox;
@@ -334,12 +335,12 @@ begin
   Repaint;
 end;
 
-procedure TCardView.Paint;
+// Zeichnet eine Karte (Vorder- oder Rückseite) einmalig in das Cache-Bitmap.
+procedure RenderCard(Canvas: TCanvas; Card: TCard; Front: Boolean; W, H: Single);
 var
-  W, H, Rad, SX, Op, Step: Single;
+  Rad, Op, Step: Single;
   Body, Inner, R: TRectF;
   Saved: TMatrix;
-  Front: Boolean;
   S: TSuit;
   Rk: TRank;
   Col: TAlphaColor;
@@ -372,16 +373,9 @@ const
     (0.64, 0.41), (0.36, 0.59), (0.64, 0.59), (0.5, 0.7), (0.36, 0.81), (0.64, 0.81));
   FaceGlyph: array[rkBube..rkKoenig] of string = (#$265E, #$265B, #$265A);
 begin
-  W := Width;
-  H := Height;
-  Op := AbsoluteOpacity;
+  Op := 1;
   Rad := W * 0.08;
-  SX := Abs(Cos(Pi * FFlip));
-  Front := IfThen(FFlip < 0.5, Ord(FFrom), Ord(FTo)) = 1;
   Saved := Canvas.Matrix;
-  if SX < 0.999 then
-    Canvas.SetMatrix(TMatrix.CreateTranslation(-W / 2, 0) * TMatrix.CreateScaling(Max(SX, 0.02), 1) *
-      TMatrix.CreateTranslation(W / 2, 0) * Saved);
   Body := RectF(2, 2, W - 4, H - 5); // Rand lassen: FMX invalidiert nur die Kontrollgrenzen
 
   // Schatten
@@ -411,11 +405,7 @@ begin
     Canvas.SetMatrix(TMatrix.CreateTranslation(-W / 2, -H / 2) * TMatrix.CreateRotation(Pi) *
       TMatrix.CreateTranslation(W / 2 - 2, H / 2 - 3) * Canvas.Matrix);
     Index;
-    if SX < 0.999 then
-      Canvas.SetMatrix(TMatrix.CreateTranslation(-W / 2, 0) * TMatrix.CreateScaling(Max(SX, 0.02), 1) *
-        TMatrix.CreateTranslation(W / 2, 0) * Saved)
-    else
-      Canvas.SetMatrix(Saved);
+    Canvas.SetMatrix(Saved);
 
     case Rk of
       rkAss:
@@ -448,19 +438,6 @@ begin
         H * 0.3, Col, SymbolFont);
       Txt(SuitSymbol[S], RectF(Inner.Left, Inner.Top + H * 0.44, Inner.Right, Inner.Bottom - H * 0.04),
         H * 0.16, Col, SymbolFont);
-    end;
-
-    if Dim then
-    begin
-      Canvas.Fill.Kind := TBrushKind.Solid;
-      Canvas.Fill.Color := $70101418;
-      Canvas.FillRect(Body, Rad, Rad, AllCorners, Op);
-    end;
-    if Playable and IsMouseOver then
-    begin
-      Canvas.Stroke.Color := Gold;
-      Canvas.Stroke.Thickness := 3;
-      Canvas.DrawRect(RectF(3, 3, W - 5, H - 6), Rad, Rad, AllCorners, Op);
     end;
   end
   else
@@ -509,6 +486,86 @@ begin
     Canvas.Stroke.Color := $90D4AF37;
     Canvas.DrawRect(Inner, Rad * 0.6, Rad * 0.6, AllCorners, Op);
     Txt(#$2665, R, W * 0.2, $FFD4AF37, SymbolFont);
+  end;
+  Canvas.SetMatrix(Saved);
+end;
+
+var
+  // Bild-Cache: 20 Vorderseiten + 1 Rückseite, neu erzeugt bei geänderter Kartengröße
+  FaceCache: array[TCard] of TBitmap;
+  BackCache: TBitmap;
+  CacheW, CacheH, CacheScale: Single;
+
+procedure FreeCardCache;
+var
+  C: TCard;
+begin
+  for C := Low(TCard) to High(TCard) do
+    FreeAndNil(FaceCache[C]);
+  FreeAndNil(BackCache);
+end;
+
+function CardBitmap(Card: TCard; Front: Boolean; W, H, Scale: Single): TBitmap;
+var
+  B: ^TBitmap;
+begin
+  if (W <> CacheW) or (H <> CacheH) or (Scale <> CacheScale) then
+  begin
+    FreeCardCache;
+    CacheW := W;
+    CacheH := H;
+    CacheScale := Scale;
+  end;
+  if Front then
+    B := @FaceCache[Card]
+  else
+    B := @BackCache;
+  if B^ = nil then
+  begin
+    B^ := TBitmap.Create(Ceil(W * Scale), Ceil(H * Scale));
+    B^.Clear(0);
+    if B^.Canvas.BeginScene then
+      try
+        B^.Canvas.SetMatrix(TMatrix.CreateScaling(Scale, Scale));
+        RenderCard(B^.Canvas, Card, Front, W, H);
+      finally
+        B^.Canvas.EndScene;
+      end;
+  end;
+  Result := B^;
+end;
+
+procedure TCardView.Paint;
+var
+  W, H, SX, Op, Rad: Single;
+  Saved: TMatrix;
+  Front: Boolean;
+  Bmp: TBitmap;
+begin
+  W := Width;
+  H := Height;
+  Op := AbsoluteOpacity;
+  Rad := W * 0.08;
+  SX := Abs(Cos(Pi * FFlip));
+  Front := IfThen(FFlip < 0.5, Ord(FFrom), Ord(FTo)) = 1;
+  Saved := Canvas.Matrix;
+  if SX < 0.999 then // Umdrehen: horizontal um die Mitte stauchen
+    Canvas.SetMatrix(TMatrix.CreateTranslation(-W / 2, 0) * TMatrix.CreateScaling(Max(SX, 0.02), 1) *
+      TMatrix.CreateTranslation(W / 2, 0) * Saved);
+  Bmp := CardBitmap(Card, Front, W, H, Canvas.Scale);
+  Canvas.DrawBitmap(Bmp, RectF(0, 0, Bmp.Width, Bmp.Height), RectF(0, 0, W, H), Op, False);
+  if Front and Dim then
+  begin
+    Canvas.Fill.Kind := TBrushKind.Solid;
+    Canvas.Fill.Color := $70101418;
+    Canvas.FillRect(RectF(2, 2, W - 4, H - 5), Rad, Rad, AllCorners, Op);
+  end;
+  if Front and Playable and IsMouseOver then
+  begin
+    Canvas.Stroke.Kind := TBrushKind.Solid;
+    Canvas.Stroke.Color := Gold;
+    Canvas.Stroke.Thickness := 3;
+    Canvas.DrawRect(RectF(3, 3, W - 5, H - 6), Rad, Rad, AllCorners, Op);
   end;
   Canvas.SetMatrix(Saved);
 end;
@@ -1426,12 +1483,9 @@ begin
       end)
   else if ((Seat = FMe) and Assigned(AskLocal)) or
     ((FRole <> nrClient) and (not Assigned(AskLocal) or (FKind[Seat] = skAI))) then
-    After(DelayMs,
-      procedure
-      var
-        V: string;
+    ComputeAsync(DelayMs, Compute,
+      procedure(V: string)
       begin
-        V := Compute();
         Publish(Kind, Seat, V, -1);
         Apply(V);
       end)
@@ -1444,6 +1498,44 @@ begin
     FWait.Apply := Apply;
     ProcessInbox;
   end;
+end;
+
+// KI rechnet im Hintergrund, damit Animationen flüssig bleiben. Der Spielzustand ändert sich
+// nicht, solange der Ablauf auf diese Entscheidung wartet; das Ergebnis kommt frühestens nach
+// DelayMs (natürliche Denkpause) und wird verworfen, wenn inzwischen neu gestartet wurde.
+procedure TGameForm.ComputeAsync(DelayMs: Integer; const Compute: TFunc<string>; const Done: TProc<string>);
+var
+  Gen: Integer;
+  Started: UInt64;
+begin
+  Gen := FGen;
+  Started := TThread.GetTickCount64;
+  TThread.CreateAnonymousThread(
+    procedure
+    var
+      V: string;
+      Ok: Boolean;
+    begin
+      try
+        V := Compute();
+        Ok := True;
+      except
+        Ok := False; // z. B. Spielzustand wurde durch Neustart ersetzt
+      end;
+      TThread.Queue(nil,
+        procedure
+        begin
+          if Gen <> FGen then
+            Exit;
+          if not Ok then
+            V := Compute(); // Rückfall im Hauptthread, damit der Ablauf nie hängen bleibt
+          After(Max(0, DelayMs - Integer(TThread.GetTickCount64 - Started)),
+            procedure
+            begin
+              Done(V);
+            end);
+        end);
+    end).Start;
 end;
 
 function TGameForm.ValidDecision(Kind: Char; Seat: TSeat; const Value: string): Boolean;
@@ -2636,5 +2728,10 @@ begin
           ResultButton.Action();
       end);
 end;
+
+initialization
+
+finalization
+  FreeCardCache;
 
 end.
