@@ -1,0 +1,20 @@
+# Build-Ausgaben
+Win32/
+Win64/
+Android/
+Android64/
+*.dcu
+*.o
+*.exe
+*.so
+*.apk
+*.res
+
+# IDE-lokale Dateien und Sicherungen
+__history/
+__recovery/
+*.local
+*.identcache
+*.deployproj
+*.bak
+*.tvsconfig
